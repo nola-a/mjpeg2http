@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 				if (c != NULL) {
 					if (client_tx(c) < 0)
 						client_free(c);
-					if (!c->is_auth && !client_are_pending_bytes(c))
+					else if (!c->is_auth && !client_are_pending_bytes(c))
 						client_free(c);
 				}
 			}
