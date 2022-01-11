@@ -3,13 +3,13 @@ CFLAGS=-Wall -O3
 
 all: mjpeg2http
 
-video.o: video.c
+video.o: video.c video.h
 	$(CC) $(CFLAGS) -c video.c
 
-client.o: client.c
+client.o: client.c client.h
 	$(CC) $(CFLAGS) -c client.c
 
-server.o: server.c
+server.o: server.c server.h
 	$(CC) $(CFLAGS) -c server.c
 
 mjpeg2http: main.o video.o client.o server.o
