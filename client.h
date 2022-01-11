@@ -30,7 +30,7 @@
 #include "list.h"
 
 
-#define MAXSIZE 130000
+#define MAXSIZE 200000
 
 typedef struct {
 

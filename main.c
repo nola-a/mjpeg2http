@@ -35,7 +35,7 @@
 #include "client.h"
 #include "list.h"
 
-#define MAX_FRAME_SIZE 130000
+#define MAX_FRAME_SIZE 200000
 #define MAX_FILE_DESCRIPTORS 32
 #define WEBCAM_IDX 1
 #define WEBSERVER_IDX 0
