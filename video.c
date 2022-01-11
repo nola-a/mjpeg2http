@@ -11,7 +11,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <linux/videodev2.h>
 #include <stdint.h>
@@ -52,35 +51,41 @@ static int xioctl(int fh, int request, void *arg)
 uint32_t video_read_jpeg(void *frame, int maxsize)
 {
 	struct v4l2_buffer buf;
+	unsigned int i;
 
 	CLEAR(buf);
 
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	buf.memory = V4L2_MEMORY_MMAP;
-
+	buf.memory = V4L2_MEMORY_USERPTR;
+	
 	if (-1 == xioctl(fd, VIDIOC_DQBUF, &buf)) {
-		switch (errno) {
-			case EAGAIN:
-				return 0;
-
-			case EIO:
-				/* Could ignore EIO, see spec. */
-
-				/* fall through */
-
-			default:
-				errno_exit("VIDIOC_DQBUF");
-		}
+	        switch (errno) {
+	        case EAGAIN:
+	                return 0;
+	
+	        case EIO:
+	                /* Could ignore EIO, see spec. */
+	
+	                /* fall through */
+	
+	        default:
+	                errno_exit("VIDIOC_DQBUF");
+	        }
 	}
-
-	assert(buf.index < n_buffers);
+	
+	for (i = 0; i < n_buffers; ++i)
+	        if (buf.m.userptr == (unsigned long)buffers[i].start
+	            && buf.length == buffers[i].length)
+	                break;
+	
+	assert(i < n_buffers);
 	assert(buf.bytesused < maxsize);
 
-	memcpy(frame, buffers[buf.index].start, buf.bytesused);
+	memcpy(frame, (void *)buf.m.userptr, buf.bytesused);
 	uint32_t len = buf.bytesused;
-
+	
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-		errno_exit("VIDIOC_QBUF");
+	                 errno_exit("VIDIOC_QBUF");
 
 	return len;
 }
@@ -104,8 +109,10 @@ static void start_capturing(void)
 
                 CLEAR(buf);
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                buf.memory = V4L2_MEMORY_MMAP;
+                buf.memory = V4L2_MEMORY_USERPTR;
                 buf.index = i;
+                buf.m.userptr = (unsigned long)buffers[i].start;
+                buf.length = buffers[i].length;
 
                 if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
                         errno_exit("VIDIOC_QBUF");
@@ -113,6 +120,7 @@ static void start_capturing(void)
         type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
                 errno_exit("VIDIOC_STREAMON");
+
 }
 
 static void uninit_device(void)
@@ -120,66 +128,46 @@ static void uninit_device(void)
         unsigned int i;
 
         for (i = 0; i < n_buffers; ++i)
-                if (-1 == munmap(buffers[i].start, buffers[i].length))
-                        errno_exit("munmap");
+		free(buffers[i].start);
+
         free(buffers);
 }
 
-static void init_mmap(void)
+static void init_userp(unsigned int buffer_size)
 {
         struct v4l2_requestbuffers req;
 
         CLEAR(req);
 
-        req.count = 4;
-        req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        req.memory = V4L2_MEMORY_MMAP;
+        req.count  = 4;
+        req.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        req.memory = V4L2_MEMORY_USERPTR;
 
         if (-1 == xioctl(fd, VIDIOC_REQBUFS, &req)) {
                 if (EINVAL == errno) {
                         fprintf(stderr, "%s does not support "
-                                 "memory mappingn", dev_name);
+                                 "user pointer i/on", dev_name);
                         exit(EXIT_FAILURE);
                 } else {
                         errno_exit("VIDIOC_REQBUFS");
                 }
         }
 
-        if (req.count < 2) {
-                fprintf(stderr, "Insufficient buffer memory on %s\\n",
-                         dev_name);
-                exit(EXIT_FAILURE);
-        }
-
-        buffers = calloc(req.count, sizeof(*buffers));
+        buffers = calloc(4, sizeof(*buffers));
 
         if (!buffers) {
                 fprintf(stderr, "Out of memory\\n");
                 exit(EXIT_FAILURE);
         }
 
-        for (n_buffers = 0; n_buffers < req.count; ++n_buffers) {
-                struct v4l2_buffer buf;
+        for (n_buffers = 0; n_buffers < 4; ++n_buffers) {
+                buffers[n_buffers].length = buffer_size;
+                buffers[n_buffers].start = malloc(buffer_size);
 
-                CLEAR(buf);
-
-                buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                buf.memory      = V4L2_MEMORY_MMAP;
-                buf.index       = n_buffers;
-
-                if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &buf))
-                        errno_exit("VIDIOC_QUERYBUF");
-
-                buffers[n_buffers].length = buf.length;
-                buffers[n_buffers].start =
-                        mmap(NULL /* start anywhere */,
-                              buf.length,
-                              PROT_READ | PROT_WRITE /* required */,
-                              MAP_SHARED /* recommended */,
-                              fd, buf.m.offset);
-
-                if (MAP_FAILED == buffers[n_buffers].start)
-                        errno_exit("mmap");
+                if (!buffers[n_buffers].start) {
+                        fprintf(stderr, "Out of memory\\n");
+                        exit(EXIT_FAILURE);
+                }
         }
 }
 
@@ -284,7 +272,7 @@ static void init_device(void)
 	if (fmt.fmt.pix.sizeimage < min)
 		fmt.fmt.pix.sizeimage = min;
 
-	init_mmap();
+	init_userp(fmt.fmt.pix.sizeimage);
 }
 
 static void close_device(void)
