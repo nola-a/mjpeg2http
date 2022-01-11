@@ -131,9 +131,11 @@ int main(int argc, char **argv)
 				// there are outstanding data ready to transmit
 				client_t* c = client_get_by_fd(&clients, fds[i].fd);
 				if (c != NULL) {
-					if (client_tx(c) < 0)
+					if (client_tx(c) < 0) {
 						client_free(c);
-					else if (!c->is_auth && !client_are_pending_bytes(c))
+						continue;
+					}
+					if (!c->is_auth && !client_are_pending_bytes(c))
 						client_free(c);
 				}
 			}
