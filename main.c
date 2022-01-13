@@ -34,11 +34,20 @@
 #include "server.h"
 #include "client.h"
 #include "list.h"
+#include "protocol.h"
 
 #define MAX_FRAME_SIZE 200000
 #define MAX_FILE_DESCRIPTORS 32
 #define WEBCAM_IDX 1
 #define WEBSERVER_IDX 0
+
+extern const char* welcome;
+extern const int welcome_len;
+extern const char* welcome_ko;
+extern const int welcome_ko_len;
+extern const char* frame_header;
+extern const char* end_frame;
+extern const int end_frame_len;
 
 int main(int argc, char **argv)
 {
@@ -48,14 +57,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	char* welcome = FIRST_MESSAGE;
-	int welcome_len = strlen(welcome);
-	char* welcome_ko = UNAUTHORIZED_MESSAGE;
-	int welcome_ko_len = strlen(welcome_ko);
-	char* frame_header = FRAME_HEADER;
-	char* end_frame = END_FRAME;
-	int end_frame_len = strlen(end_frame);
-	char frame[MAX_FRAME_SIZE];
+	char jpeg_image[MAX_FRAME_SIZE];
 	char frame_complete[MAX_FRAME_SIZE];
 
 	int server_fd = server_create(argv[1], atoi(argv[2]));
@@ -109,11 +111,11 @@ int main(int argc, char **argv)
 
 		if (fds[WEBCAM_IDX].revents & POLLIN) {
 			// new frame is ready
-			uint32_t n = video_read_jpeg(frame, MAX_FRAME_SIZE);
+			uint32_t n = video_read_jpeg(jpeg_image, MAX_FRAME_SIZE);
 			if (n > 0) {
 				gettimeofday(&timestamp, NULL);
 				int total = snprintf(frame_complete, MAX_FRAME_SIZE, frame_header, n, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
-				memcpy(frame_complete + total, frame, n);
+				memcpy(frame_complete + total, jpeg_image, n);
 				memcpy(frame_complete + total + n, end_frame, end_frame_len);
 				struct dlist *itr;
         			list_iterate(itr, &clients) {

@@ -15,7 +15,7 @@ server.o: server.c server.h
 mjpeg2http: main.o video.o client.o server.o
 	$(CC) -o mjpeg2http video.o client.o server.o main.o
 
-main.o: main.c
+main.o: main.c protocol.h
 	$(CC) $(CFLAGS) -c main.c
 
 clean:
