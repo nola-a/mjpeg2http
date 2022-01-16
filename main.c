@@ -36,9 +36,7 @@
 #include "client.h"
 #include "list.h"
 #include "protocol.h"
-
-#define MAX_FRAME_SIZE 200000
-#define MAX_FILE_DESCRIPTORS 32
+#include "constants.h"
 
 enum type {
 	SERVER,
@@ -57,19 +55,10 @@ struct observed {
 	observed_data_t data;
 };
 
-extern const char* welcome;
-extern const int welcome_len;
-extern const char* welcome_ko;
-extern const int welcome_ko_len;
-extern const char* frame_header;
-extern const char* end_frame;
-extern const int end_frame_len;
-
-char jpeg_image[MAX_FRAME_SIZE];
-char frame_complete[MAX_FRAME_SIZE];
-
-int numClients;
-int maxClients;
+char g_jpeg_image[MAX_FRAME_SIZE];
+char g_frame_complete[MAX_FRAME_SIZE];
+int g_numClients;
+const int g_maxClients = MAX_FILE_DESCRIPTORS - 2;
 
 void add_clients(int epfd, int server_fd, struct dlist* clients)
 {
@@ -83,7 +72,7 @@ void add_clients(int epfd, int server_fd, struct dlist* clients)
 			perror("server_new_peer error");
 			exit(EXIT_FAILURE);
 		} 
-		if (numClients <= maxClients - 1) {
+		if (g_numClients <= g_maxClients - 1) {
 			printf("add new client\n");
 			struct observed* oc = malloc(sizeof(struct observed));
 			oc->data.client = client_init(peer.hostname, peer.port, peer.fd);
@@ -95,7 +84,7 @@ void add_clients(int epfd, int server_fd, struct dlist* clients)
 				perror("epoll_ctl: add client");
 				exit(EXIT_FAILURE);
 			}
-			++numClients;
+			++g_numClients;
 		} else {
 			printf("reject new connection => increase MAX_FILE_DESCRIPTORS\n");
 			close(peer.fd);
@@ -113,23 +102,23 @@ void remove_client(int epfd, struct observed* oc)
 	client_free(oc->data.client);
 	list_del(&oc->node);
 	free(oc);
-	--numClients;
+	--g_numClients;
 }
 
 void handle_new_frame(struct dlist* clients) 
 {
-	uint32_t n = video_read_jpeg(jpeg_image, MAX_FRAME_SIZE);
+	uint32_t n = video_read_jpeg(g_jpeg_image, MAX_FRAME_SIZE);
 	if (n > 0) {
 		struct timeval timestamp;
 		gettimeofday(&timestamp, NULL);
-		int total = snprintf(frame_complete, MAX_FRAME_SIZE, frame_header, n, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
-		memcpy(frame_complete + total, jpeg_image, n);
-		memcpy(frame_complete + total + n, end_frame, end_frame_len);
+		int total = snprintf(g_frame_complete, MAX_FRAME_SIZE, frame_header, n, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
+		memcpy(g_frame_complete + total, g_jpeg_image, n);
+		memcpy(g_frame_complete + total + n, end_frame, end_frame_len);
 		struct dlist *itr;
 		list_iterate(itr, clients) {
 			struct observed* oc = list_get_entry(itr, struct observed, node);
 			if (oc->data.client->is_auth)
-				client_enqueue_frame(oc->data.client, (uint8_t*)frame_complete, total + n + end_frame_len);
+				client_enqueue_frame(oc->data.client, (uint8_t*)g_frame_complete, total + n + end_frame_len);
 		}
 	}
 
@@ -156,24 +145,13 @@ void disable_video(int epfd, struct observed *video)
 
 int main(int argc, char **argv)
 {
-	signal(SIGPIPE, SIG_IGN);
-	setvbuf(stdout, NULL, _IONBF, 0);
 	if (argc != 5) {
 		printf("usage example: ./mjpeg2http 192.168.2.1 8080 /dev/video0 this_is_token\n");
 		return 1;
 	}
 
-	struct epoll_event ev, events[MAX_FILE_DESCRIPTORS];
-
-	int server_fd = server_create(argv[1], atoi(argv[2]));
-	int video_fd = video_init(argv[3], 640, 480, 30);
-	declare_list(clients);
-
-	struct observed video, server, *oev;
-	video.data.fd = video_fd;
-	video.t = VIDEO;
-	server.data.fd = server_fd;
-	server.t = SERVER;
+	signal(SIGPIPE, SIG_IGN);
+	setvbuf(stdout, NULL, _IONBF, 0);
 
 	int epfd = epoll_create1(0);
 	if (epfd == -1) {
@@ -181,6 +159,18 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	int server_fd = server_create(argv[1], atoi(argv[2]));
+	int video_fd = video_init(argv[3], WIDTH, HEIGHT, FRAME_PER_SECOND);
+
+	struct epoll_event ev, events[MAX_FILE_DESCRIPTORS];
+	struct observed video, server, *oev;
+
+	video.data.fd = video_fd;
+	video.t = VIDEO;
+
+	// register webserver 
+	server.data.fd = server_fd;
+	server.t = SERVER;
 	ev.events =  EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
 	ev.data.ptr = &server;
 	if (epoll_ctl(epfd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
@@ -188,20 +178,18 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	maxClients = MAX_FILE_DESCRIPTORS - 2;
 	client_t *c;
-
-	int nfds, n;
-	int videoOn = 0;
+	int nfds, n, videoOn = 0;
+	declare_list(clients);
 
 	for (;;) {
 
-		if (numClients > 0 && videoOn == 0) { 
-			printf("turn on video because clients=%d\n", numClients);
+		if (g_numClients > 0 && videoOn == 0) { 
+			printf("turn on video because clients=%d\n", g_numClients);
 			videoOn = 1;
 			enable_video(epfd, &video);
-		} else if (numClients == 0 && videoOn == 1) {
-			printf("turn off video because clients=%d\n", numClients);
+		} else if (g_numClients == 0 && videoOn == 1) {
+			printf("turn off video because clients=%d\n", g_numClients);
 			videoOn = 0;
 			disable_video(epfd, &video);
 		}
@@ -229,18 +217,17 @@ int main(int argc, char **argv)
 						perror("error on server");
 						exit(EXIT_FAILURE);
 					}
-					if (events[n].events & EPOLLIN) {
+					if (events[n].events & EPOLLIN) 
 						add_clients(epfd, server_fd, &clients);
-					}
 					break;
 
 				case CLIENT:
-					c = oev->data.client;
 					if (events[n].events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP))
 							goto removeClient;
 
+					c = oev->data.client;
 					if (events[n].events & EPOLLOUT) { 
-						if (c->is_auth && client_tx(c) < 0)
+						if (client_tx(c) < 0)
 							goto removeClient;
 					}
 
@@ -255,19 +242,11 @@ int main(int argc, char **argv)
 								} else {
 									printf("client auth KO %s %d\n", c->hostname, c->port);
 									client_enqueue_frame(c, (uint8_t*)welcome_ko, welcome_ko_len);
+									goto removeClient;
 								}
 							} else if (done < 0) {
 								goto removeClient;
 							}
-						} else {
-							// discard bytes
-							int r;
-							while ((r = read(c->fd, c->rxbuf, MAXSIZE)) > 0);
-							if (r < 0) {
-								if (errno == EAGAIN || errno == EWOULDBLOCK)
-									continue;
-							}
-							goto removeClient;
 						}
 					}
 					break;

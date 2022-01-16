@@ -57,7 +57,7 @@ int client_parse_request(client_t *client)
 	}
 
 	int r;
-	while ((r = read(client->fd, client->rxbuf + client->rxbuf_pos, MAXSIZE - client->rxbuf_pos)) >= 0)
+	while ((r = read(client->fd, client->rxbuf + client->rxbuf_pos, 1000 - client->rxbuf_pos)) >= 0)
 		client->rxbuf_pos += r;
 
 	if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -98,8 +98,10 @@ void client_free(client_t *client)
 int client_write_txbuf(client_t *client)
 {
 	int txbuf_pos;
-	while ((txbuf_pos = write(client->fd, client->txbuf + client->txbuf_pos, client->total_to_sent - client->txbuf_pos)) > 0)
+	while ((txbuf_pos = write(client->fd, client->txbuf + client->txbuf_pos, client->total_to_sent - client->txbuf_pos)) > 0) {
+		//printf("raw: %.*s\n", txbuf_pos, client->txbuf + client->txbuf_pos);
 		client->txbuf_pos += txbuf_pos;
+	}
 
 	if (client->txbuf_pos == client->total_to_sent) {
 	//	printf("frame size=%d sent %s:%d\n", client->total_to_sent, client->hostname, client->port);

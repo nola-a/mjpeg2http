@@ -22,48 +22,14 @@
  *  SOFTWARE.
  */
 
-#ifndef CLIENT_H
-#define CLIENT_H
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
 
-#include <stdint.h>
-
-#include "list.h"
-#include "constants.h"
-
-
-typedef struct {
-
-	/* client data */
-	char* hostname;
-	int port;
-	int fd;
-
-	/* tx buffer */
-	uint8_t txbuf[MAX_FRAME_SIZE];
-	uint32_t txbuf_pos;
- 	uint32_t total_to_sent;
-
-	/* rx buffer */
-	uint8_t rxbuf[1000];
-	int rxbuf_pos;
-
-	/* tx queue */
-	struct dlist tx_queue;
-
-	int is_auth;
-	int start_token, end_token;
-} client_t;
-
-typedef struct {
-	struct dlist node;
-	uint8_t* payload;
-	int size;
-} message_t;
-
-client_t* client_init(char* hostname, int port, int fd);
-void client_free(client_t *client);
-int client_parse_request(client_t *client);
-int client_tx(client_t *client);
-int client_enqueue_frame(client_t *client, uint8_t *payload, int size);
+#define MAX_FRAME_SIZE 200000
+#define MAX_FRAME_SIZE 200000
+#define MAX_FILE_DESCRIPTORS 32
+#define WIDTH 640
+#define HEIGHT 480
+#define FRAME_PER_SECOND 30
 
 #endif
