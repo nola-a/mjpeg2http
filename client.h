@@ -34,8 +34,6 @@
 
 typedef struct {
 
-	struct dlist node;
-
 	/* client data */
 	char* hostname;
 	int port;
@@ -43,7 +41,7 @@ typedef struct {
 
 	/* tx buffer */
 	uint8_t txbuf[MAXSIZE];
-	uint32_t bytes_sent;
+	uint32_t txbuf_pos;
  	uint32_t total_to_sent;
 
 	/* rx buffer */
@@ -67,9 +65,6 @@ client_t* client_init(char* hostname, int port, int fd);
 void client_free(client_t *client);
 int client_parse_request(client_t *client);
 int client_tx(client_t *client);
-int client_are_pending_bytes(client_t *client);
-void client_enqueue_frame(client_t *client, uint8_t *payload, int size);
-int client_register_fds(struct dlist* clients, struct pollfd *pollfds);
-client_t* client_get_by_fd(struct dlist* clients, int fd);
+int client_enqueue_frame(client_t *client, uint8_t *payload, int size);
 
 #endif

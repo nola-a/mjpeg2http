@@ -37,31 +37,4 @@ struct remotepeer {
 int  server_create(char* hostname, int port);
 int  server_new_peer(int fd, struct remotepeer* rpeer);
 
-// web signatures
-#define BOUNDARY "hdfahelfaelfalfvcjcfjfjfj"
-
-#define FIRST_MESSAGE "HTTP/1.0 200 OK\r\n" \
-		      "Access-Control-Allow-Origin: *\r\n" \
-		      "Connection: close\r\n" \
-		      "Server: mjpeg2http/1.0\r\n" \
-		      "Cache-Control: no-store, no-cache, must-revalidate, pre-check=0, post-check=0, max-age=0\r\n" \
-		      "Pragma: no-cache\r\n" \
-		      "Expires: Mon, 3 Jan 2000 12:34:56 GMT\r\n" \
-		      "Content-Type: multipart/x-mixed-replace;boundary=" BOUNDARY "\r\n" \
-		      "\r\n" \
-		      "--" BOUNDARY "\r\n"
-
-#define FRAME_HEADER "Content-Type: image/jpeg\r\n" \
-                     "Content-Length: %d\r\n" \
-                     "X-Timestamp: %d.%06d\r\n" \
-                     "\r\n"
-
-#define END_FRAME "\r\n--" BOUNDARY "\r\n"
-
-#define UNAUTHORIZED_MESSAGE "HTTP/1.1 401 Unauthorized\r\n" \
-	              "Connection: close\r\n" \
-		      "\r\n" \
-		      "not authorized\r\n" \
-		      "\r\n"
-
 #endif

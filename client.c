@@ -39,6 +39,7 @@
 
 client_t* client_init(char* hostname, int port, int fd) 
 {
+	printf("new client %s %d\n", hostname, port);
 	client_t* c = malloc(sizeof(client_t));
 	c->hostname = strdup(hostname);
 	c->port = port;
@@ -50,29 +51,36 @@ client_t* client_init(char* hostname, int port, int fd)
 
 int client_parse_request(client_t *client) 
 {
-	if (client->start_token == 0) {
-		int r = read(client->fd, client->rxbuf + client->rxbuf_pos, MAXSIZE - client->rxbuf_pos);
-		if (r > 0) {
-			client->rxbuf_pos += r;
-			if (strchr((const char *)client->rxbuf, '\n') != NULL) {
-				// GET /whatever?myauthtoken HTTP/1.1
-				// read enough bytes to get myauthtoken
-				const char *sp = strchr((const char *)client->rxbuf, ' ') + 1;
-				const char *sq = strchr(sp, '?') + 1;
-				const char *eq = strchr(sq, ' ');
-				client->start_token = sq - (const char *)client->rxbuf;
-				client->end_token = eq - (const char *)client->rxbuf;
-				return 1;
-			}
-		} else if (r < 0 && errno != EAGAIN) {
-			return -1;
-		}
+	if (client->start_token != 0) {
+		// token already decoded
+		return 1;
 	}
-	return 0;
+
+	int r;
+	while ((r = read(client->fd, client->rxbuf + client->rxbuf_pos, MAXSIZE - client->rxbuf_pos)) >= 0)
+		client->rxbuf_pos += r;
+
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+		if (strchr((const char *)client->rxbuf, '\n') != NULL) {
+			// GET /whatever?myauthtoken HTTP/1.1
+			// read enough bytes to get myauthtoken
+			const char *sp = strchr((const char *)client->rxbuf, ' ') + 1;
+			const char *sq = strchr(sp, '?') + 1;
+			const char *eq = strchr(sq, ' ');
+			client->start_token = sq - (const char *)client->rxbuf;
+			client->end_token = eq - (const char *)client->rxbuf;
+			return 1;
+		}
+
+		return 0;
+	}
+
+	return -1;
 }
 
 void client_free(client_t *client) 
 {
+	printf("destroy client %s %d\n", client->hostname, client->port);
 	struct dlist *itr, *save;
 	message_t *msg;
 	list_iterate_safe(itr, save, &client->tx_queue) {
@@ -83,62 +91,68 @@ void client_free(client_t *client)
 	}
 	
 	close(client->fd);
-	list_del(&client->node);
 	free(client->hostname);
 	free(client);
 }
 
 int client_write_txbuf(client_t *client)
 {
-	int bytes_sent = write(client->fd, client->txbuf + client->bytes_sent, client->total_to_sent - client->bytes_sent);
+	int txbuf_pos;
+	while ((txbuf_pos = write(client->fd, client->txbuf + client->txbuf_pos, client->total_to_sent - client->txbuf_pos)) > 0)
+		client->txbuf_pos += txbuf_pos;
 
-	// printf("want write %d, bytes_sent %d to %s:%d\n", client->total_to_sent - client->bytes_sent, bytes_sent, client->hostname, client->port);
-	// printf("raw: %.*s\n", bytes_sent, client->txbuf + client->bytes_sent);
-
-	if (bytes_sent > 0) {
-		client->bytes_sent += bytes_sent;
-		if (client->bytes_sent == client->total_to_sent) {
-			//printf("frame size=%d sent %s:%d\n", client->total_to_sent, client->hostname, client->port);
-			client->total_to_sent = client->bytes_sent = 0;
-		}
-	} else if (bytes_sent < 0 && errno != EAGAIN) {
-		return -1;
+	if (client->txbuf_pos == client->total_to_sent) {
+	//	printf("frame size=%d sent %s:%d\n", client->total_to_sent, client->hostname, client->port);
+		client->total_to_sent = client->txbuf_pos = 0;
 	}
-	return 0;
+
+	if (txbuf_pos >= 0)
+		return 1;
+
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+		return 0;
+	}
+
+	return -1;
 }
 
 int client_tx(client_t *client)
 {
-	if (client->total_to_sent > 0) {
-        	return client_write_txbuf(client);
-        }
 
-	if (!list_empty(&client->tx_queue)) {
-		//printf("move message from tx queue to tx buffer\n");
-		message_t *msg = list_get_entry(list_get_first(&client->tx_queue), message_t, node);
-		list_del(&msg->node);
-		memcpy(client->txbuf, msg->payload, msg->size);
-		client->total_to_sent = msg->size;
-		client->bytes_sent = 0;
-		free(msg->payload);
-		free(msg);
-		return client_write_txbuf(client);
-	}
-	return 0;
+	int r;
+
+	do {
+		r = 0;
+		if (client->total_to_sent > 0) {
+	        	r = client_write_txbuf(client);
+	        }  else if (!list_empty(&client->tx_queue)) {
+			//printf("move message from tx queue to tx buffer\n");
+			message_t *msg = list_get_entry(list_get_first(&client->tx_queue), message_t, node);
+			list_del(&msg->node);
+			memcpy(client->txbuf, msg->payload, msg->size);
+			client->total_to_sent = msg->size;
+			client->txbuf_pos = 0;
+			free(msg->payload);
+			free(msg);
+			r = client_write_txbuf(client);
+		}
+	} while(r > 0);
+
+	return r;
 }
 
-void client_enqueue_frame(client_t *client, uint8_t *payload, int size)
+int client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 {
 	int lsize = 0;
 	list_size(lsize, &client->tx_queue);
-//	printf("enqueue message size=%d, still to sent=%d tx_queue_size=%d\n", size, client->total_to_sent - client->bytes_sent, lsize);
+	//printf("enqueue message size=%d, still to sent=%d tx_queue_size=%d\n", size, client->total_to_sent - client->txbuf_pos, lsize);
 
 	if (lsize || client->total_to_sent != 0) {
 		if (lsize > 5) {
 			printf("tx queue %s %d-> drop message because current size %d\n", client->hostname, client->port, lsize);
-			return;
+			return 0;
 		}
-//		printf("place message into queue\n");
+		//printf("place message into queue\n");
 		message_t *msg = malloc(sizeof(message_t));
 		msg->payload = malloc(size);
 		msg->size = size;
@@ -146,45 +160,11 @@ void client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 		init_list_entry(&msg->node);
 		list_add_right(&msg->node, &client->tx_queue);
 	} else {
-//		printf("place message into buffer for tx\n");
+		//printf("place message into buffer for tx\n");
 		memcpy(client->txbuf, payload, size);
 		client->total_to_sent = size;
-		client->bytes_sent = 0;
+		client->txbuf_pos = 0;
 	}
-	return;
-}
 
-int client_register_fds(struct dlist* clients, struct pollfd *pollfds)
-{
-	struct dlist *itr;
-	int i = 0;
-	list_iterate(itr, clients) {
-		client_t *c = list_get_entry(itr, client_t, node);
-		pollfds[i].fd = c->fd;
-		pollfds[i].events = POLLIN | POLLHUP | POLLERR;
-		if (c->total_to_sent > 0 || !list_empty(&c->tx_queue))
-			pollfds[i].events |= POLLOUT;
-		++i;
-	}
-	return i;
-}	
-
-client_t* client_get_by_fd(struct dlist* clients, int fd)
-{
-	client_t *client = NULL;
-	struct dlist *itr;
-	list_iterate(itr, clients) {
-		if (fd == list_get_entry(itr, client_t, node)->fd) {
-			client = list_get_entry(itr, client_t, node);
-			break;
-		}
-	}
-	return client;
-}
-
-int client_are_pending_bytes(client_t *c)
-{
-	if (c->total_to_sent > 0 || !list_empty(&c->tx_queue))
-		return 1;
-	return 0;
+	return client_tx(client);
 }

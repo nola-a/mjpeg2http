@@ -53,7 +53,6 @@ int server_new_peer(int sfd, struct remotepeer* rpeer)
 	uint32_t addrlen = sizeof(struct sockaddr_storage);
 	rpeer->fd = accept(sfd, (struct sockaddr *)&remote, &addrlen);
 	if (rpeer->fd < 0) {
-		perror("error address");
 		return -1;
 	}
 
@@ -61,7 +60,7 @@ int server_new_peer(int sfd, struct remotepeer* rpeer)
 	fcntl(rpeer->fd, F_SETFL, O_NONBLOCK);
 	int on = 1;
 	if (0 != setsockopt(rpeer->fd, IPPROTO_TCP, TCP_NODELAY, (char *) &on, sizeof(int))) {
-		perror("error address");
+		perror("error address setsock");
 		return -1;
 	}
 
