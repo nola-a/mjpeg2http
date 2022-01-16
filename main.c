@@ -184,16 +184,6 @@ int main(int argc, char **argv)
 
 	for (;;) {
 
-		if (g_numClients > 0 && videoOn == 0) { 
-			printf("turn on video because clients=%d\n", g_numClients);
-			videoOn = 1;
-			enable_video(epfd, &video);
-		} else if (g_numClients == 0 && videoOn == 1) {
-			printf("turn off video because clients=%d\n", g_numClients);
-			videoOn = 0;
-			disable_video(epfd, &video);
-		}
-
 		nfds = epoll_wait(epfd, events, MAX_FILE_DESCRIPTORS, -1);
 		if (nfds == -1) {
 			perror("epoll_wait");
@@ -217,8 +207,14 @@ int main(int argc, char **argv)
 						perror("error on server");
 						exit(EXIT_FAILURE);
 					}
-					if (events[n].events & EPOLLIN) 
+					if (events[n].events & EPOLLIN) {
 						add_clients(epfd, server_fd, &clients);
+						if (g_numClients > 0 && videoOn == 0) {
+							printf("turn on video because clients=%d\n", g_numClients);
+							videoOn = 1;
+							enable_video(epfd, &video);
+						}
+					}
 					break;
 
 				case CLIENT:
@@ -254,9 +250,12 @@ int main(int argc, char **argv)
 			continue;
 	removeClient:
 			remove_client(epfd, oev);
+			if (g_numClients == 0 && videoOn == 1) {
+				printf("turn off video because clients=%d\n", g_numClients);
+				videoOn = 0;
+				disable_video(epfd, &video);
+			}
 		}
-		
-		
 	}
 
 	return 0;
