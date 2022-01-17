@@ -38,6 +38,26 @@ $ ./mjpeg2http 192.168.2.1 8080 /dev/video0 my_secret_token
 
 Open browser on http://192.168.2.1:8080/path?my_secret_token
 
+## One time token
+
+Run:
+
+```bash
+$ ./mjpeg2http 192.168.2.1 8080 /dev/video0 my_secret_token /tmp/mjpeg2http_token
+ 
+```
+Book access:
+
+```bash
+$ echo "12345678901234567890" > /tmp/mjpeg2http_token
+ 
+```
+
+Open browser on http://192.168.2.1:8080/path?12345678901234567890
+
+The token will be valid exactly for one access after that it gets invalid
+
 ## Warning
-* mjpeg2http should be used in private network because it does not use TLS connections 
+* mjpeg2http should be used in private network because it does not use TLS connections
+* token length must be exactly TOKEN_SIZE (see constants.h) 
  
