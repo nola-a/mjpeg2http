@@ -24,24 +24,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <errno.h>
-#include <signal.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <netinet/tcp.h>
-#include <getopt.h>
-#include <pthread.h>
-#include <syslog.h>
-#include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <netdb.h>
 
 #include "server.h"
