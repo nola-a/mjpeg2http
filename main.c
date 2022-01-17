@@ -30,6 +30,9 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "video.h"
 #include "server.h"
@@ -41,26 +44,49 @@
 enum type {
 	SERVER,
 	CLIENT,
-	VIDEO
+	VIDEO,
+	TOKEN
 };
 
-typedef union observed_data {
+union observed_data {
 	client_t* client;
 	int fd;
-} observed_data_t;
+};
 
 struct observed {
 	struct dlist node;
 	enum type t;
-	observed_data_t data;
+	union observed_data data;
 };
 
 char g_jpeg_image[MAX_FRAME_SIZE];
 char g_frame_complete[MAX_FRAME_SIZE];
 int g_numClients;
 const int g_maxClients = MAX_FILE_DESCRIPTORS - 2;
+char g_token[NUMBER_OF_TOKEN * (TOKEN_SIZE + 1)];
+int g_token_pos = -1;
+int g_videoOn = 0;
 
-void add_clients(int epfd, int server_fd, struct dlist* clients)
+void enable_video(int epfd, struct observed *video) 
+{
+	struct epoll_event ev;
+	ev.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
+	ev.data.ptr = video;
+	if (epoll_ctl(epfd, EPOLL_CTL_ADD, video->data.fd, &ev) == -1) {
+		perror("epoll_ctl: enable video");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void disable_video(int epfd, struct observed *video)
+{
+	if (epoll_ctl(epfd, EPOLL_CTL_DEL, video->data.fd, NULL) == -1) {
+		perror("epoll_ctl: disable video");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void add_clients(int epfd, int server_fd, struct dlist* clients, struct observed* video)
 {
 	int ret;
 	struct remotepeer peer;
@@ -73,7 +99,6 @@ void add_clients(int epfd, int server_fd, struct dlist* clients)
 			exit(EXIT_FAILURE);
 		} 
 		if (g_numClients <= g_maxClients - 1) {
-			printf("add new client\n");
 			struct observed* oc = malloc(sizeof(struct observed));
 			oc->data.client = client_init(peer.hostname, peer.port, peer.fd);
 			oc->t = CLIENT;
@@ -90,11 +115,16 @@ void add_clients(int epfd, int server_fd, struct dlist* clients)
 			close(peer.fd);
 		}
 	} while (ret > 0);
+	if (g_numClients > 0 && g_videoOn == 0) {
+		printf("turn on video because clients=%d\n", g_numClients);
+		g_videoOn = 1;
+		enable_video(epfd, video);
+	}
 }
 
-void remove_client(int epfd, struct observed* oc)
+void remove_client(int epfd, struct observed* oc, struct observed* video)
 {
-	printf("remove client %s %d\n", oc->data.client->hostname, oc->data.client->port);
+	printf("remove client %s %d fd=%d\n", oc->data.client->hostname, oc->data.client->port, oc->data.client->fd);
 	if (epoll_ctl(epfd, EPOLL_CTL_DEL, oc->data.client->fd, NULL) == -1) {
 		perror("epoll_ctl: remove_client");
 		exit(EXIT_FAILURE);
@@ -102,7 +132,11 @@ void remove_client(int epfd, struct observed* oc)
 	client_free(oc->data.client);
 	list_del(&oc->node);
 	free(oc);
-	--g_numClients;
+	if (--g_numClients == 0 && g_videoOn == 1) {
+		printf("turn off video because clients=%d\n", g_numClients);
+		g_videoOn = 0;
+		disable_video(epfd, video);
+	}
 }
 
 void handle_new_frame(struct dlist* clients) 
@@ -124,29 +158,61 @@ void handle_new_frame(struct dlist* clients)
 
 }
 
-void enable_video(int epfd, struct observed *video) 
-{
+void create_pipe(char *name, int epfd) {
+	mkfifo(name, 0777);
+	int pipe_fd = open(name, O_RDWR| O_TRUNC);
+	struct observed* pipe = malloc(sizeof(struct observed));
+	pipe->data.fd = pipe_fd;
+	pipe->t = TOKEN;
 	struct epoll_event ev;
-	ev.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
-	ev.data.ptr = video;
-	if (epoll_ctl(epfd, EPOLL_CTL_ADD, video->data.fd, &ev) == -1) {
-		perror("epoll_ctl: enable video");
+	ev.events =  EPOLLIN | EPOLLET | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
+	ev.data.ptr = pipe;
+	fcntl(pipe_fd, F_SETFL, O_NONBLOCK);
+	if (epoll_ctl(epfd, EPOLL_CTL_ADD, pipe_fd, &ev) == -1) {
+		perror("epoll_ctl: add pipe");
 		exit(EXIT_FAILURE);
 	}
+} 
+
+int handle_token(int fd) {
+	int r;
+	g_token_pos %= NUMBER_OF_TOKEN * (TOKEN_SIZE + 1);
+	while ((r = read(fd, g_token + g_token_pos, NUMBER_OF_TOKEN * (TOKEN_SIZE + 1) - g_token_pos)) > 0) {
+		g_token_pos %= NUMBER_OF_TOKEN * (TOKEN_SIZE + 1);
+		g_token_pos += r;
+	}
+
+//	printf("token=%.*s\n", NUMBER_OF_TOKEN * (TOKEN_SIZE + 1), g_token);
+
+	if (r < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			return 0;
+		}
+		return -1;
+	}
+
+	return 0;
+
 }
 
-void disable_video(int epfd, struct observed *video)
+int check_token(const char* auth, uint8_t* start, int count)
 {
-	if (epoll_ctl(epfd, EPOLL_CTL_DEL, video->data.fd, NULL) == -1) {
-		perror("epoll_ctl: disable video");
-		exit(EXIT_FAILURE);
+	if (memcmp(auth, start, count) == 0)
+		return 1;
+
+	for(int i = 0; i < NUMBER_OF_TOKEN * (TOKEN_SIZE + 1) && g_token_pos != -1; i += TOKEN_SIZE + 1) {
+		if (memcmp(g_token + i, start, count) == 0) {
+			memset(g_token + i, 0, count);
+			return 1;
+		}
 	}
+	return 0;
 }
 
 int main(int argc, char **argv)
 {
-	if (argc != 5) {
-		printf("usage example: ./mjpeg2http 192.168.2.1 8080 /dev/video0 this_is_token\n");
+	if (argc < 5) {
+		printf("usage example: ./mjpeg2http 192.168.2.1 8080 /dev/video0 this_is_token [/tmp/mjpeg2http_onetimetoken]\n");
 		return 1;
 	}
 
@@ -178,8 +244,13 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	if (argc == 6) {
+		g_token_pos = 0;
+		create_pipe(argv[5], epfd);
+	}
+
 	client_t *c;
-	int nfds, n, videoOn = 0;
+	int nfds, n;
 	declare_list(clients);
 
 	for (;;) {
@@ -193,6 +264,10 @@ int main(int argc, char **argv)
 		for (n = 0; n < nfds; ++n) {
 			oev = (struct observed*)events[n].data.ptr;
 			switch(oev->t) {
+	
+				case TOKEN:
+					handle_token(oev->data.fd);
+					break;
 
 				case VIDEO:
 					if (events[n].events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)) {
@@ -208,52 +283,44 @@ int main(int argc, char **argv)
 						exit(EXIT_FAILURE);
 					}
 					if (events[n].events & EPOLLIN) {
-						add_clients(epfd, server_fd, &clients);
-						if (g_numClients > 0 && videoOn == 0) {
-							printf("turn on video because clients=%d\n", g_numClients);
-							videoOn = 1;
-							enable_video(epfd, &video);
-						}
+						add_clients(epfd, server_fd, &clients, &video);
 					}
 					break;
 
 				case CLIENT:
-					if (events[n].events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP))
-							goto removeClient;
-
 					c = oev->data.client;
+					if (events[n].events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)) {
+						printf("generic error fd=%d\n", c->fd);
+						remove_client(epfd, oev, &video);
+						break;
+					}
+
 					if (events[n].events & EPOLLOUT) { 
-						if (client_tx(c) < 0)
-							goto removeClient;
+						if (client_tx(c) < 0) {
+							remove_client(epfd, oev, &video);
+							break;
+						}
 					}
 
 					if (events[n].events & EPOLLIN) {
 						if (!c->is_auth) {
 							int done = client_parse_request(c);
 							if (done > 0) {
-								if (memcmp(argv[4], c->rxbuf + c->start_token, c->end_token - c->start_token) == 0) {
+								if (check_token(argv[4], c-> rxbuf + c->start_token, c->end_token - c->start_token)) {
 									printf("client auth OK %s %d\n", c->hostname, c->port);
 									c->is_auth = 1;
 									client_enqueue_frame(c, (uint8_t*)welcome, welcome_len);
 								} else {
 									printf("client auth KO %s %d\n", c->hostname, c->port);
 									client_enqueue_frame(c, (uint8_t*)welcome_ko, welcome_ko_len);
-									goto removeClient;
+									remove_client(epfd, oev, &video);
 								}
 							} else if (done < 0) {
-								goto removeClient;
+								remove_client(epfd, oev, &video);
 							}
 						}
 					}
 					break;
-			}
-			continue;
-	removeClient:
-			remove_client(epfd, oev);
-			if (g_numClients == 0 && videoOn == 1) {
-				printf("turn off video because clients=%d\n", g_numClients);
-				videoOn = 0;
-				disable_video(epfd, &video);
 			}
 		}
 	}

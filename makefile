@@ -25,5 +25,8 @@ debug: mjpeg2http
 	gdb --args ./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken
 
 run: mjpeg2http
-	./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken
+	./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
+
+valgrind: mjpeg2http
+	valgrind --leak-check=yes ./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
 

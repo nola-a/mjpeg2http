@@ -39,13 +39,13 @@
 
 client_t* client_init(char* hostname, int port, int fd) 
 {
-	printf("new client %s %d\n", hostname, port);
+	printf("new client %s %d fd=%d\n", hostname, port, fd);
 	client_t* c = malloc(sizeof(client_t));
 	c->hostname = strdup(hostname);
 	c->port = port;
 	c->fd = fd;
 	init_list_entry(&c->tx_queue);
-	c->start_token = c->end_token = c->rxbuf_pos = c->is_auth = 0;
+	c->start_token = c->end_token = c->rxbuf_pos = c->is_auth = c->txbuf_pos = 0;
 	return c;
 }
 
@@ -57,30 +57,34 @@ int client_parse_request(client_t *client)
 	}
 
 	int r;
-	while ((r = read(client->fd, client->rxbuf + client->rxbuf_pos, 1000 - client->rxbuf_pos)) >= 0)
+	while ((r = read(client->fd, client->rxbuf + client->rxbuf_pos, 1000 - client->rxbuf_pos)) > 0)
 		client->rxbuf_pos += r;
 
-	if (errno == EAGAIN || errno == EWOULDBLOCK) {
-		if (strchr((const char *)client->rxbuf, '\n') != NULL) {
-			// GET /whatever?myauthtoken HTTP/1.1
-			// read enough bytes to get myauthtoken
-			const char *sp = strchr((const char *)client->rxbuf, ' ') + 1;
-			const char *sq = strchr(sp, '?') + 1;
-			const char *eq = strchr(sq, ' ');
-			client->start_token = sq - (const char *)client->rxbuf;
-			client->end_token = eq - (const char *)client->rxbuf;
-			return 1;
-		}
+	if (r < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			if (strchr((const char *)client->rxbuf, '\n') != NULL) {
+				// GET /whatever?myauthtoken HTTP/1.1
+				// read enough bytes to get myauthtoken
+				const char *sp = strchr((const char *)client->rxbuf, ' ') + 1;
+				const char *sq = strchr(sp, '?') + 1;
+				const char *eq = strchr(sq, ' ');
+				client->start_token = sq - (const char *)client->rxbuf;
+				client->end_token = eq - (const char *)client->rxbuf;
+				return 1;
+			}
 
-		return 0;
+			return 0;
+		}
+		printf("rxbuf %d error %s\n", client->fd, strerror(errno));
+		return -1;
 	}
 
-	return -1;
+	return 0;
 }
 
 void client_free(client_t *client) 
 {
-	printf("destroy client %s %d\n", client->hostname, client->port);
+	printf("destroy client %s %d fd=%d\n", client->hostname, client->port, client->fd);
 	struct dlist *itr, *save;
 	message_t *msg;
 	list_iterate_safe(itr, save, &client->tx_queue) {
@@ -114,6 +118,8 @@ int client_write_txbuf(client_t *client)
 	if (errno == EAGAIN || errno == EWOULDBLOCK) {
 		return 0;
 	}
+
+	printf("txbuf fd=%d error %s\n", client->fd, strerror(errno));
 
 	return -1;
 }
