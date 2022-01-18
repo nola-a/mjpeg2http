@@ -66,6 +66,7 @@ const int g_maxClients = MAX_FILE_DESCRIPTORS - 2;
 char g_token[NUMBER_OF_TOKEN * (TOKEN_SIZE + 1)];
 int g_token_pos = -1;
 int g_videoOn = 0;
+int g_frame_complete_len;
 
 void enable_video(int epfd, struct observed *video) 
 {
@@ -139,20 +140,24 @@ void remove_client(int epfd, struct observed* oc, struct observed* video)
 	}
 }
 
+void prepare_frame(uint8_t* jpeg_image, uint32_t len) {
+	struct timeval timestamp;
+	gettimeofday(&timestamp, NULL);
+	int total = snprintf(g_frame_complete, MAX_FRAME_SIZE, frame_header, len, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
+	memcpy(g_frame_complete + total, jpeg_image, len);
+	memcpy(g_frame_complete + total + len, end_frame, end_frame_len);
+	g_frame_complete_len =  total + len + end_frame_len;
+}
+
 void handle_new_frame(struct dlist* clients) 
 {
-	uint32_t n = video_read_jpeg(g_jpeg_image, MAX_FRAME_SIZE);
+	uint32_t n = video_read_jpeg(prepare_frame, MAX_FRAME_SIZE);
 	if (n > 0) {
-		struct timeval timestamp;
-		gettimeofday(&timestamp, NULL);
-		int total = snprintf(g_frame_complete, MAX_FRAME_SIZE, frame_header, n, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
-		memcpy(g_frame_complete + total, g_jpeg_image, n);
-		memcpy(g_frame_complete + total + n, end_frame, end_frame_len);
 		struct dlist *itr;
 		list_iterate(itr, clients) {
 			struct observed* oc = list_get_entry(itr, struct observed, node);
 			if (oc->data.client->is_auth)
-				client_enqueue_frame(oc->data.client, (uint8_t*)g_frame_complete, total + n + end_frame_len);
+				client_enqueue_frame(oc->data.client, (uint8_t*)g_frame_complete, g_frame_complete_len);
 		}
 	}
 

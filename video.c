@@ -70,7 +70,7 @@ static int xioctl(int fh, int request, void *arg)
         return r;
 }
 
-uint32_t video_read_jpeg(void *frame, int maxsize)
+uint32_t video_read_jpeg(void (*cb)(uint8_t*, uint32_t len), int maxsize)
 {
 	struct v4l2_buffer buf;
 	unsigned int i;
@@ -103,7 +103,8 @@ uint32_t video_read_jpeg(void *frame, int maxsize)
 	assert(i < n_buffers);
 	assert(buf.bytesused < maxsize);
 
-	memcpy(frame, (void *)buf.m.userptr, buf.bytesused);
+	cb((uint8_t*)buf.m.userptr, buf.bytesused);
+
 	uint32_t len = buf.bytesused;
 	
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
