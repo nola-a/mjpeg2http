@@ -45,7 +45,7 @@ client_t* client_init(char* hostname, int port, int fd)
 	c->port = port;
 	c->fd = fd;
 	init_list_entry(&c->tx_queue);
-	c->start_token = c->end_token = c->rxbuf_pos = c->is_auth = c->txbuf_pos = 0;
+	c->total_to_sent = c->start_token = c->end_token = c->rxbuf_pos = c->is_auth = c->txbuf_pos = 0;
 	return c;
 }
 
