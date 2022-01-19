@@ -168,10 +168,17 @@ int client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 		init_list_entry(&msg->node);
 		list_add_right(&msg->node, &client->tx_queue);
 	} else {
-		//printf("place message into buffer for tx\n");
-		memcpy(client->txbuf, payload, size);
-		client->total_to_sent = size;
-		client->txbuf_pos = 0;
+		int pos, sent = 0;
+		while ((pos = write(client->fd, payload + sent,  size - sent)) > 0)
+			sent += pos;
+
+		if (sent < size) {
+		//	printf("place remaining bytes %d of %d into buffer tx\n", size - sent, size);
+			memcpy(client->txbuf + sent, payload + sent, size - sent);
+			client->total_to_sent = size;
+			client->txbuf_pos = sent;
+		}
+		return 1;
 	}
 
 	return client_tx(client);
