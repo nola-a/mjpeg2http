@@ -67,6 +67,7 @@ char g_token[NUMBER_OF_TOKEN * (TOKEN_SIZE + 1)];
 int g_token_pos = -1;
 int g_videoOn = 0;
 int g_frame_complete_len;
+int g_file_fd;
 
 void enable_video(int epfd, struct observed *video) 
 {
@@ -138,6 +139,25 @@ void remove_client(int epfd, struct observed* oc, struct observed* video)
 		g_videoOn = 0;
 		disable_video(epfd, video);
 	}
+}
+
+int g_idx = 0;
+
+void dump_frame(uint8_t* jpeg_image, uint32_t len)
+{
+	char output[1000];
+	snprintf(output, 1000, "/tmp/frames/test_%d.jpeg", g_idx++);
+	int fd = open(output, O_RDWR | O_CREAT, S_IRWXU | S_IRUSR);
+	if (fd < 0) {
+		perror("error on opening!!");
+		exit(EXIT_FAILURE);
+	}
+	int w = write(fd, jpeg_image, len);
+	if (w != len) {
+		perror("error on writing!!");
+		exit(EXIT_FAILURE);
+	}
+	close(fd);
 }
 
 void prepare_frame(uint8_t* jpeg_image, uint32_t len)
@@ -259,6 +279,7 @@ int main(int argc, char **argv)
 	client_t *c;
 	int nfds, n;
 	declare_list(clients);
+	enable_video(epfd, &video);
 
 	for (;;) {
 
@@ -281,7 +302,7 @@ int main(int argc, char **argv)
 						perror("error on video");
 						exit(EXIT_FAILURE);
 					}
-					handle_new_frame(&clients);
+					video_read_jpeg(dump_frame, MAX_FRAME_SIZE);
 					break;
 
 				case SERVER:
