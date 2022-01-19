@@ -1,7 +1,7 @@
 /**
  *  mjpeg2http
  *
- *  Copyright (c) 2022 Nolano Antonino. Licensed under the MIT license, as follows:
+ *  Copyright (c) 2022 Antonino Nolano. Licensed under the MIT license, as follows:
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal

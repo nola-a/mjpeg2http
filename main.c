@@ -1,7 +1,7 @@
 /**
  *  mjpeg2http
  *
- *  Copyright (c) 2022 Nolano Antonino. Licensed under the MIT license, as follows:
+ *  Copyright (c) 2022 Antonino Nolano. Licensed under the MIT license, as follows:
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -140,7 +140,8 @@ void remove_client(int epfd, struct observed* oc, struct observed* video)
 	}
 }
 
-void prepare_frame(uint8_t* jpeg_image, uint32_t len) {
+void prepare_frame(uint8_t* jpeg_image, uint32_t len)
+{
 	struct timeval timestamp;
 	gettimeofday(&timestamp, NULL);
 	int total = snprintf(g_frame_complete, MAX_FRAME_SIZE, frame_header, len, (int)timestamp.tv_sec, (int)timestamp.tv_usec);
@@ -162,7 +163,8 @@ void handle_new_frame(struct dlist* clients)
 
 }
 
-void create_pipe(char *name, int epfd) {
+void create_pipe(char *name, int epfd)
+{
 	mkfifo(name, 0777);
 	int pipe_fd = open(name, O_RDWR| O_TRUNC);
 	struct observed* pipe = malloc(sizeof(struct observed));
@@ -178,7 +180,8 @@ void create_pipe(char *name, int epfd) {
 	}
 } 
 
-int handle_token(int fd) {
+int handle_token(int fd)
+{
 	int r;
 	g_token_pos %= NUMBER_OF_TOKEN * (TOKEN_SIZE + 1);
 	while ((r = read(fd, g_token + g_token_pos, NUMBER_OF_TOKEN * (TOKEN_SIZE + 1) - g_token_pos)) > 0) {

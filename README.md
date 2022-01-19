@@ -1,6 +1,6 @@
 # mjpeg2http
 
-**A pure C linux MJPEG over HTTP server**
+**A pure C Linux MJPEG over HTTP server**
 <p>
 <a href="https://raw.githubusercontent.com/uraimo/Bitter/master/LICENSE"><img src="http://img.shields.io/badge/license-MIT-blue.svg?style=flat" alt="License: MIT" /></a>
 </p>

@@ -3,7 +3,7 @@
  *
  *  based on: https://www.kernel.org/doc/html/v4.10/media/uapi/v4l/capture.c.html
  *
- *  Copyright (c) 2022 Nolano Antonino. Licensed under the MIT license, as follows:
+ *  Copyright (c) 2022 Antonino Nolano. Licensed under the MIT license, as follows:
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -194,7 +194,8 @@ static void init_userp(unsigned int buffer_size)
         }
 }
 
-static void setup_framerate() {
+static void setup_framerate()
+{
 
 	struct v4l2_streamparm streamparm;
 	streamparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -330,7 +331,8 @@ static void open_device(void)
 	}
 }
 
-int video_init(const char *dev, int width, int height, int rate) {
+int video_init(const char *dev, int width, int height, int rate)
+{
 	dev_name = strdup(dev);
 	g_width = width;
 	g_height = height;
@@ -341,7 +343,8 @@ int video_init(const char *dev, int width, int height, int rate) {
 	return fd;
 }
 
-void video_deinit() {
+void video_deinit()
+{
 	stop_capturing();
 	uninit_device();
 	close_device();
