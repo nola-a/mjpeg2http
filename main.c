@@ -151,8 +151,7 @@ void prepare_frame(uint8_t* jpeg_image, uint32_t len) {
 
 void handle_new_frame(struct dlist* clients) 
 {
-	uint32_t n = video_read_jpeg(prepare_frame, MAX_FRAME_SIZE);
-	if (n > 0) {
+	if (video_read_jpeg(prepare_frame, MAX_FRAME_SIZE) > 0) {
 		struct dlist *itr;
 		list_iterate(itr, clients) {
 			struct observed* oc = list_get_entry(itr, struct observed, node);
