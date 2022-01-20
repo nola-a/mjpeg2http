@@ -58,6 +58,9 @@ Open browser on http://192.168.2.1:8080/path?12345678901234567890
 The token will be valid exactly for one access after that it gets invalid
 
 ## Warning
-* mjpeg2http should be used in private network because it does not use TLS connections.  If you would like to use mjpeg2http while on a public network with TLS, you can try [stunnel](https://www.stunnel.org/).
-* token length must be exactly TOKEN_SIZE (see constants.h) 
++ mjpeg2http should be used in private network because it does not use TLS connections. If you would like to use it while on a public network it is highly recommended to use TLS, some ideas:
+    - you can try [stunnel](https://www.stunnel.org/).
+    - nginx or apache httpd placed in front of mjpeg2http with a reverse proxy.
+    - for encryption between mjpeg2http and server it can be used ssh tunnels or wireguard.
++ token length must be exactly TOKEN_SIZE (see constants.h) 
  
