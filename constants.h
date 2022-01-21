@@ -32,5 +32,7 @@
 #define FRAME_PER_SECOND 30
 #define TOKEN_SIZE 20
 #define NUMBER_OF_TOKEN 20
+#define TX_QUEUE_MAX 5
+#define SERVER_LISTEN_BACKLOG 10
 
 #endif

@@ -59,7 +59,6 @@ struct observed {
 	union observed_data data;
 };
 
-char g_jpeg_image[MAX_FRAME_SIZE];
 char g_frame_complete[MAX_FRAME_SIZE];
 int g_numClients;
 const int g_maxClients = MAX_FILE_DESCRIPTORS - 2;
@@ -165,7 +164,7 @@ void handle_new_frame(struct dlist* clients)
 
 void create_pipe(char *name, int epfd)
 {
-	mkfifo(name, 0777);
+	mkfifo(name, S_IRUSR|S_IWUSR);
 	int pipe_fd = open(name, O_RDWR| O_TRUNC);
 	struct observed* pipe = malloc(sizeof(struct observed));
 	pipe->data.fd = pipe_fd;

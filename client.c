@@ -149,16 +149,16 @@ int client_tx(client_t *client)
 	return r;
 }
 
-int client_enqueue_frame(client_t *client, uint8_t *payload, int size)
+void client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 {
-	int lsize = 0;
-	list_size(lsize, &client->tx_queue);
-	//printf("enqueue message size=%d, still to sent=%d tx_queue_size=%d\n", size, client->total_to_sent - client->txbuf_pos, lsize);
+	int tx_queue_size = 0;
+	list_size(tx_queue_size, &client->tx_queue);
+	//printf("enqueue message size=%d, still to sent=%d tx_queue_size=%d\n", size, client->total_to_sent - client->txbuf_pos, tx_queue_size);
 
-	if (lsize || client->total_to_sent != 0) {
-		if (lsize > 5) {
-			printf("tx queue %s %d-> drop message because current size %d\n", client->hostname, client->port, lsize);
-			return 0;
+	if (tx_queue_size || client->total_to_sent) {
+		if (tx_queue_size > TX_QUEUE_MAX) {
+			printf("tx queue %s %d-> drop message because current size %d\n", client->hostname, client->port, tx_queue_size);
+			return;
 		}
 		//printf("place message into queue\n");
 		message_t *msg = malloc(sizeof(message_t));
@@ -167,6 +167,7 @@ int client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 		memcpy(msg->payload, payload, size);
 		init_list_entry(&msg->node);
 		list_add_right(&msg->node, &client->tx_queue);
+		client_tx(client);
 	} else {
 		int pos, sent = 0;
 		while ((pos = write(client->fd, payload + sent,  size - sent)) > 0)
@@ -178,8 +179,5 @@ int client_enqueue_frame(client_t *client, uint8_t *payload, int size)
 			client->total_to_sent = size;
 			client->txbuf_pos = sent;
 		}
-		return 1;
 	}
-
-	return client_tx(client);
 }

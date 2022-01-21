@@ -35,6 +35,7 @@
 #include <netdb.h>
 
 #include "server.h"
+#include "constants.h"
 
 int server_new_peer(int sfd, struct remotepeer* rpeer)
 {
@@ -63,7 +64,7 @@ int server_new_peer(int sfd, struct remotepeer* rpeer)
 	return 1;
 }
 
-int  server_create(char* hostname, int port)
+int server_create(char* hostname, int port)
 {
 	// create fd
 	int error = 0;
@@ -97,7 +98,7 @@ int  server_create(char* hostname, int port)
 	}
 
 	// listening and backlog
-	if (listen(socket_fd, 10) < 0) {
+	if (listen(socket_fd, SERVER_LISTEN_BACKLOG) < 0) {
 		perror("listen error");
 		return -1;
 	}
