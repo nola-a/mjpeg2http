@@ -56,13 +56,17 @@ int client_parse_request(client_t *client)
 
 	if (r < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			if (strchr((const char *)client->rxbuf, '\n') != NULL) {
+			const char *end = strchr((const char *)client->rxbuf, '\n');
+			if (end != NULL) {
 				// GET /whatever?myauthtoken HTTP/1.1
 				// read enough bytes to get myauthtoken
-				const char *sp = strchr((const char *)client->rxbuf, ' ') + 1;
-				const char *sq = strchr(sp, '?') + 1;
-				const char *eq = strchr(sq, ' ');
-				client->start_token = sq - (const char *)client->rxbuf;
+				const char *sp = strchr((const char *)client->rxbuf, ' ');
+				if (sp == NULL || end - sp < 2) return -1;
+				const char *sq = strchr(sp + 1, '?');
+				if (sq == NULL || end - sq < 2) return -1;
+				const char *eq = strchr(sq + 1, ' ');
+				if (eq == NULL) return -1;
+				client->start_token = sq + 1 - (const char *)client->rxbuf;
 				client->end_token = eq - (const char *)client->rxbuf;
 				return 1;
 			}
