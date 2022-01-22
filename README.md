@@ -14,7 +14,7 @@ It can be used to stream JPEG files over an IP-based network from a webcam to va
 
 The implementation uses epoll on non-blocking file descriptors and is not thread-based.
 
-## Build
+## Build using make
 
 Install dependencies:
 ```bash
@@ -24,6 +24,16 @@ $ sudo apt install build-essential libv4l-dev
 Compile with:
 
 ```bash
+$ make
+```
+
+## Build using cmake
+
+Compile with:
+
+```bash
+$ mkdir build
+$ cmake ..
 $ make
 ```
 
