@@ -66,6 +66,7 @@ char g_token[NUMBER_OF_TOKEN * (TOKEN_SIZE + 1)];
 int g_token_pos = -1;
 int g_videoOn = 0;
 int g_frame_complete_len;
+int g_token_len;
 
 void enable_video(int epfd, struct observed *video) 
 {
@@ -203,10 +204,13 @@ int handle_token(int fd)
 
 int check_token(const char* auth, uint8_t* start, int count)
 {
-	if (memcmp(auth, start, count) == 0)
+	if (g_token_len == count && memcmp(auth, start, count) == 0)
 		return 1;
 
-	for(int i = 0; i < NUMBER_OF_TOKEN * (TOKEN_SIZE + 1) && g_token_pos != -1; i += TOKEN_SIZE + 1) {
+	if (g_token_pos == -1 || TOKEN_SIZE != count)
+		return 0;
+
+	for(int i = 0; i < NUMBER_OF_TOKEN * (TOKEN_SIZE + 1); i += TOKEN_SIZE + 1) {
 		if (memcmp(g_token + i, start, count) == 0) {
 			memset(g_token + i, 0, count);
 			return 1;
@@ -239,6 +243,8 @@ int main(int argc, char **argv)
 
 	video.data.fd = video_fd;
 	video.t = VIDEO;
+
+	g_token_len = strlen(argv[4]);
 
 	// register webserver 
 	server.data.fd = server_fd;
