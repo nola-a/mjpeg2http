@@ -1,2 +1,3 @@
 *.o
 mjpeg2http
+build/
