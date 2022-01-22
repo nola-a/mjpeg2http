@@ -1,3 +1,5 @@
+.PHONY: all clean debug run dump valgrind format
+
 CC=gcc
 CFLAGS=-Wall -O3
 TIMESTAMP=$(shell date +'%Y%m%d%H%M%S')
