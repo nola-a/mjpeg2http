@@ -41,3 +41,6 @@ dump2file: dump2file.o video.o
 valgrind: mjpeg2http
 	valgrind --leak-check=yes ./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
 
+format:
+	clang-format -i -style=LLVM *.c *.h
+
