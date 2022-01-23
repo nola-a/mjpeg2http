@@ -44,6 +44,8 @@ int server_new_peer(int sfd, struct remotepeer *rpeer) {
   uint32_t addrlen = sizeof(struct sockaddr_storage);
   rpeer->fd = accept(sfd, (struct sockaddr *)&remote, &addrlen);
   if (rpeer->fd < 0) {
+    if (EAGAIN == errno || EWOULDBLOCK == errno)
+      return 0;
     return -1;
   }
 

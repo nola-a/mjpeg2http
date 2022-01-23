@@ -110,7 +110,7 @@ int client_write_txbuf(client_t *client) {
 
   if (client->txbuf_pos == client->total_to_sent) {
     //	printf("frame size=%d sent %s:%d\n", client->total_to_sent,
-    //client->hostname, client->port);
+    // client->hostname, client->port);
     client->total_to_sent = client->txbuf_pos = 0;
   }
 
@@ -178,7 +178,7 @@ void client_enqueue_frame(client_t *client, uint8_t *payload, int size) {
 
     if (sent < size) {
       //	printf("place remaining bytes %d of %d into buffer tx\n", size -
-      //sent, size);
+      // sent, size);
       memcpy(client->txbuf + sent, payload + sent, size - sent);
       client->total_to_sent = size;
       client->txbuf_pos = sent;

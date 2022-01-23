@@ -88,12 +88,13 @@ void add_clients(int epfd, int server_fd, struct dlist *clients,
   struct epoll_event ev;
   do {
     ret = server_new_peer(server_fd, &peer);
-    if (ret == -1) {
-      if (EAGAIN == errno || EWOULDBLOCK == errno)
-        break;
+    if (ret == 0)
+      break; // no more connections to accept
+    else if (ret == -1) {
       perror("server_new_peer error");
       exit(EXIT_FAILURE);
     }
+
     if (g_numClients <= g_maxClients - 1) {
       struct observed *oc = malloc(sizeof(struct observed));
       oc->data.client = client_init(peer.hostname, peer.port, peer.fd);
@@ -203,8 +204,8 @@ int check_token(const char *auth, uint8_t *start, int count) {
     return 0;
 
   for (int i = 0; i < NUMBER_OF_TOKEN * (TOKEN_SIZE + 1); i += TOKEN_SIZE + 1) {
-    if (memcmp(g_token + i, start, count) == 0) {
-      memset(g_token + i, 0, count);
+    if (memcmp(g_token + i, start, TOKEN_SIZE) == 0) {
+      memset(g_token + i, 0, TOKEN_SIZE);
       return 1;
     }
   }
