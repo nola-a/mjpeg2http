@@ -64,6 +64,7 @@ client_t *client_init(char *hostname, int port, int fd);
 void client_free(client_t *client);
 int client_parse_request(client_t *client);
 int client_tx(client_t *client);
-void client_enqueue_frame(client_t *client, uint8_t *payload, int size);
+void client_enqueue_frame(client_t *client, uint8_t *payload, int size,
+                          uint8_t **allocated);
 
 #endif

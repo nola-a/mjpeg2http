@@ -91,7 +91,8 @@ void client_free(client_t *client) {
   list_iterate_safe(itr, save, &client->tx_queue) {
     list_del(&list_get_entry(itr, message_t, node)->node);
     msg = list_get_entry(itr, message_t, node);
-    free(msg->payload);
+    if (--*(msg->payload + msg->size) == 0)
+      free(msg->payload);
     free(msg);
   }
 
@@ -142,7 +143,8 @@ int client_tx(client_t *client) {
       memcpy(client->txbuf, msg->payload, msg->size);
       client->total_to_sent = msg->size;
       client->txbuf_pos = 0;
-      free(msg->payload);
+      if (--*(msg->payload + msg->size) == 0)
+        free(msg->payload);
       free(msg);
       r = client_write_txbuf(client);
     }
@@ -151,23 +153,30 @@ int client_tx(client_t *client) {
   return r;
 }
 
-void client_enqueue_frame(client_t *client, uint8_t *payload, int size) {
+void client_enqueue_frame(client_t *client, uint8_t *payload, int size,
+                          uint8_t **allocated) {
   int tx_queue_size = 0;
   list_size(tx_queue_size, &client->tx_queue);
   // printf("enqueue message size=%d, still to sent=%d tx_queue_size=%d\n",
   // size, client->total_to_sent - client->txbuf_pos, tx_queue_size);
 
   if (tx_queue_size || client->total_to_sent) {
-    if (tx_queue_size > TX_QUEUE_MAX) {
+    if (tx_queue_size > TX_QUEUE_MAX || allocated == NULL) {
       printf("tx queue %s %d-> drop message because current size %d\n",
              client->hostname, client->port, tx_queue_size);
       return;
     }
     // printf("place message into queue\n");
     message_t *msg = malloc(sizeof(message_t));
-    msg->payload = malloc(size);
+    if (*allocated == NULL) {
+      *allocated = malloc(size + 1);
+      *(*allocated + size) = 0x02;
+      memcpy(*allocated, payload, size);
+    } else {
+      ++*(*allocated + size);
+    }
+    msg->payload = *allocated;
     msg->size = size;
-    memcpy(msg->payload, payload, size);
     init_list_entry(&msg->node);
     list_add_right(&msg->node, &client->tx_queue);
     client_tx(client);

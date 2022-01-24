@@ -23,6 +23,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -149,12 +150,17 @@ void prepare_frame(uint8_t *jpeg_image, uint32_t len) {
 
 void handle_new_frame(struct dlist *clients) {
   if (video_read_jpeg(prepare_frame, MAX_FRAME_SIZE) > 0) {
+    uint8_t *allocated = NULL;
     struct dlist *itr;
     list_iterate(itr, clients) {
       struct observed *oc = list_get_entry(itr, struct observed, node);
       if (oc->data.client->is_auth)
         client_enqueue_frame(oc->data.client, (uint8_t *)g_frame_complete,
-                             g_frame_complete_len);
+                             g_frame_complete_len, &allocated);
+    }
+    if (allocated != NULL) {
+      if (--*(allocated + g_frame_complete_len) == 0)
+        free(allocated);
     }
   }
 }
@@ -218,6 +224,11 @@ int main(int argc, char **argv) {
            "this_is_token [/tmp/mjpeg2http_onetimetoken]\n");
     return 1;
   }
+
+  // reference counter uses 1 byte
+  // to increase this limit more bytes
+  // must be used
+  assert(g_maxClients < 255);
 
   signal(SIGPIPE, SIG_IGN);
   setvbuf(stdout, NULL, _IONBF, 0);
@@ -315,10 +326,11 @@ int main(int argc, char **argv) {
                               c->end_token - c->start_token)) {
                 printf("client auth OK %s %d\n", c->hostname, c->port);
                 c->is_auth = 1;
-                client_enqueue_frame(c, (uint8_t *)welcome, welcome_len);
+                client_enqueue_frame(c, (uint8_t *)welcome, welcome_len, NULL);
               } else {
                 printf("client auth KO %s %d\n", c->hostname, c->port);
-                client_enqueue_frame(c, (uint8_t *)welcome_ko, welcome_ko_len);
+                client_enqueue_frame(c, (uint8_t *)welcome_ko, welcome_ko_len,
+                                     NULL);
                 remove_client(epfd, oev, &video);
               }
             } else if (done < 0) {
