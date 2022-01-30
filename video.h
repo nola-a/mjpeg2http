@@ -30,6 +30,6 @@
 
 int video_init(const char *device, int width, int height, int rate);
 void video_deinit();
-uint32_t video_read_jpeg(void (*cb)(uint8_t *, uint32_t len), int maxsize);
+int video_read_jpeg(void (*cb)(uint8_t *, uint32_t len), int maxsize);
 
 #endif

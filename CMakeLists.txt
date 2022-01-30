@@ -25,10 +25,18 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (mjpeg2http C)
 
-add_executable(mjpeg2http
+add_library(libmjpeg2http STATIC
+  libmjpeg2http.c
   server.c
-  main.c
   client.c
   video.c
+)
+
+add_executable(mjpeg2http
+  main.c
+)
+
+target_link_libraries(mjpeg2http
+  libmjpeg2http
 )
 

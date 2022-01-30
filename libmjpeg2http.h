@@ -22,25 +22,14 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#ifndef LIBMJPEG2HTTP_H
+#define LIBMJPEG2HTTP_H
 
-#include <stdio.h>
-#include <stdlib.h>
+// run loop (blocking call) - not thread-safe
+int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
+                       char *tokenpipe);
 
-#include "libmjpeg2http.h"
+// interrupts loop and deallocates all resources - not thread-safe
+void libmjpeg2http_endLoop();
 
-int main(int argc, char **argv) {
-  if (argc < 5) {
-    printf("usage example: ./mjpeg2http 192.168.2.1 8080 /dev/video0 "
-           "this_is_token [/tmp/mjpeg2http_onetimetoken]\n");
-    return 1;
-  }
-
-  char *tokenpipe = NULL;
-
-  if (argc == 6) {
-    tokenpipe = argv[5];
-  }
-
-  libmjpeg2http_loop(argv[1], atoi(argv[2]), argv[3], argv[4], tokenpipe);
-  return 0;
-}
+#endif

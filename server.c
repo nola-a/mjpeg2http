@@ -84,6 +84,7 @@ int server_create(char *hostname, int port) {
                     &(((struct sockaddr_in *)&address)->sin_addr));
   if (error != 1) {
     perror("error address");
+    close(socket_fd);
     return -1;
   }
   ((struct sockaddr_in *)&address)->sin_port = htons(port);
@@ -92,6 +93,7 @@ int server_create(char *hostname, int port) {
   int yes = 1;
   if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) != 0) {
     perror("setsockopt error");
+    close(socket_fd);
     return -1;
   }
 
@@ -99,12 +101,14 @@ int server_create(char *hostname, int port) {
   if (bind(socket_fd, (struct sockaddr *)&address, sizeof(struct sockaddr_in)) <
       0) {
     perror("bind error");
+    close(socket_fd);
     return -1;
   }
 
   // listening and backlog
   if (listen(socket_fd, SERVER_LISTEN_BACKLOG) < 0) {
     perror("listen error");
+    close(socket_fd);
     return -1;
   }
 

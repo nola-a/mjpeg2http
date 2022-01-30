@@ -33,6 +33,7 @@
 
 client_t *client_init(char *hostname, int port, int fd) {
   printf("new client %s %d fd=%d\n", hostname, port, fd);
+  fflush(stdout);
   client_t *c = malloc(sizeof(client_t));
   c->hostname = strdup(hostname);
   c->port = port;
@@ -77,6 +78,7 @@ int client_parse_request(client_t *client) {
       return 0;
     }
     printf("rxbuf %d error %s\n", client->fd, strerror(errno));
+    fflush(stdout);
     return -1;
   }
 
@@ -86,6 +88,7 @@ int client_parse_request(client_t *client) {
 void client_free(client_t *client) {
   printf("destroy client %s %d fd=%d\n", client->hostname, client->port,
          client->fd);
+  fflush(stdout);
   struct dlist *itr, *save;
   message_t *msg;
   list_iterate_safe(itr, save, &client->tx_queue) {
@@ -123,6 +126,7 @@ int client_write_txbuf(client_t *client) {
   }
 
   printf("txbuf fd=%d error %s\n", client->fd, strerror(errno));
+  fflush(stdout);
 
   return -1;
 }
@@ -164,6 +168,7 @@ void client_enqueue_frame(client_t *client, uint8_t *payload, int size,
     if (tx_queue_size > TX_QUEUE_MAX || allocated == NULL) {
       printf("tx queue %s %d-> drop message because current size %d\n",
              client->hostname, client->port, tx_queue_size);
+      fflush(stdout);
       return;
     }
     // printf("place message into queue\n");

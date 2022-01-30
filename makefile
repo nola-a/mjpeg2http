@@ -26,21 +26,28 @@ CC=gcc
 CFLAGS=-Wall -O3
 TIMESTAMP=$(shell date +'%Y%m%d%H%M%S')
 
-.PHONY: all clean debug run dump valgrind format
+.PHONY: all clean debug run dump format test
 
-all: mjpeg2http
+all: mjpeg2http libmjpeg2http.a
 
-mjpeg2http: main.o video.o client.o server.o
-	$(CC) -o mjpeg2http video.o client.o server.o main.o
+mjpeg2http: main.o video.o client.o server.o libmjpeg2http.o
+	$(CC) -o mjpeg2http video.o client.o server.o main.o libmjpeg2http.o
+
+test_mem: test_mem.o video.o client.o server.o libmjpeg2http.o
+	$(CC) -o test_mem video.o client.o server.o test_mem.o libmjpeg2http.o -lpthread
 
 clean:
-	rm -f mjpeg2http client.o server.o video.o main.o dump2file dump2file.o
+	rm -f test_mem mjpeg2http *.o dump2file *.a
+
 
 debug: mjpeg2http
 	gdb --args ./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken
 
 run: mjpeg2http
 	./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
+
+test: test_mem
+	./test_mem 192.168.2.108 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
 
 dump: dump2file
 	mkdir -p /tmp/mjpeg2http_dump/$(TIMESTAMP)
@@ -49,12 +56,13 @@ dump: dump2file
 dump2file: dump2file.o video.o
 	$(CC) -o dump2file video.o dump2file.o
 
-valgrind: mjpeg2http
-	valgrind --leak-check=yes ./mjpeg2http 192.168.1.2 8080 /dev/video0 mytoken /tmp/mjpeg2http_oneshottoken
-
 format:
 	clang-format -i -style=LLVM *.c *.h
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+libmjpeg2http.a: video.o client.o server.o libmjpeg2http.o
+	ar rcs libmjpeg2http.a video.o client.o server.o libmjpeg2http.o
+
 
