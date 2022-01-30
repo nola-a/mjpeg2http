@@ -25,11 +25,20 @@
 #ifndef LIBMJPEG2HTTP_H
 #define LIBMJPEG2HTTP_H
 
+// ensure we can call these functions from C++.
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // run loop (blocking call) - not thread-safe
 int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
                        char *tokenpipe);
 
 // interrupts loop and deallocates all resources - not thread-safe
 void libmjpeg2http_endLoop();
+
+#ifdef __cplusplus
+} // end of extern "C"
+#endif
 
 #endif
