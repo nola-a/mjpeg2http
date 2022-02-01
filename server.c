@@ -89,10 +89,17 @@ int server_create(char *hostname, int port) {
   }
   ((struct sockaddr_in *)&address)->sin_port = htons(port);
 
-  // set reuse
+  // set reuseaddr
   int yes = 1;
   if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) != 0) {
-    perror("setsockopt error");
+    perror("setsockopt reuseaddr error");
+    close(socket_fd);
+    return -1;
+  }
+
+  // set reuseport
+  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(int)) != 0) {
+    perror("setsockopt reuseport error");
     close(socket_fd);
     return -1;
   }

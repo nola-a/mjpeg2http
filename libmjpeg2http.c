@@ -33,6 +33,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "client.h"
@@ -427,6 +428,7 @@ errorOnRegisterServer:
   video_deinit();
 
 errorOnVideoInit:
+  shutdown(server_fd, SHUT_RDWR);
   close(server_fd);
 
 errorOnServerCreate:
