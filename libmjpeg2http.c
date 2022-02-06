@@ -30,10 +30,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #include "client.h"
@@ -44,7 +45,7 @@
 #include "server.h"
 #include "video.h"
 
-enum type { SERVER, CLIENT, VIDEO, TOKEN };
+enum type { SERVER, CLIENT, VIDEO, TOKEN, EXITFD };
 
 union observed_data {
   client_t *client;
@@ -69,12 +70,14 @@ static int g_epfd;
 static int g_pipe_fd = -1;
 static struct observed g_pipe;
 static int g_runs = 0;
+static int g_exitfd = -1;
 
 static void cleanAll() {
   g_numClients = 0;
   g_token_pos = -1;
   g_videoOn = 0;
   g_pipe_fd = -1;
+  g_exitfd = -1;
 }
 
 static int enable_video(struct observed *video) {
@@ -248,7 +251,10 @@ static int check_token(const char *auth, uint8_t *start, int count) {
 void libmjpeg2http_endLoop() {
   if (g_runs > 0) {
     --g_runs;
-    close(g_epfd);
+    uint64_t beep;
+    if (write(g_exitfd, &beep, sizeof(uint64_t))) {
+      printf("trigger exit\n");
+    }
   }
 }
 
@@ -259,9 +265,15 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
     fflush(stdout);
     return -1;
   }
-  ++g_runs;
 
   cleanAll();
+
+  g_exitfd = eventfd(0, 0);
+  if (g_exitfd == -1) {
+    printf("libmjpeg2http_loop: cannot create g_exitfd\n");
+    fflush(stdout);
+    return -1;
+  }
 
   // reference counter uses 1 byte so
   // to increase this limit more bytes
@@ -280,6 +292,8 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
     return -1;
   }
 
+  ++g_runs;
+
   int server_fd = server_create(ipaddress, port);
   if (server_fd < 0)
     goto errorOnServerCreate;
@@ -288,8 +302,8 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
   if (video_fd < 0)
     goto errorOnVideoInit;
 
-  struct epoll_event ev, events[MAX_FILE_DESCRIPTORS];
-  struct observed video, server, *oev;
+  struct epoll_event ev, ev2, events[MAX_FILE_DESCRIPTORS];
+  struct observed video, server, *oev, exitfd;
   struct dlist *itr, *save;
 
   video.data.fd = video_fd;
@@ -304,6 +318,16 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
   ev.data.ptr = &server;
   if (epoll_ctl(g_epfd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
     perror("epoll_ctl: server socket");
+    goto errorOnRegisterServer;
+  }
+
+  // register eventfd
+  exitfd.data.fd = g_exitfd;
+  exitfd.t = EXITFD;
+  ev2.events = EPOLLIN | EPOLLRDHUP | EPOLLERR | EPOLLHUP;
+  ev2.data.ptr = &exitfd;
+  if (epoll_ctl(g_epfd, EPOLL_CTL_ADD, g_exitfd, &ev2) == -1) {
+    perror("epoll_ctl: g_exitfd");
     goto errorOnRegisterServer;
   }
 
@@ -333,6 +357,9 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
     for (n = 0; n < nfds; ++n) {
       oev = (struct observed *)events[n].data.ptr;
       switch (oev->t) {
+
+      case EXITFD:
+        goto exitFromMainLoop;
 
       case TOKEN:
         if (handle_token(oev->data.fd) < 0)
@@ -406,6 +433,7 @@ int libmjpeg2http_loop(char *ipaddress, int port, char *device, char *token,
     }
   }
 
+exitFromMainLoop:
 errorOnRemoveClient:
 errorOnAddClients:
 errorOnServer:
@@ -433,6 +461,8 @@ errorOnVideoInit:
 
 errorOnServerCreate:
   close(g_epfd);
+  close(g_exitfd);
+  g_runs = 0;
 
   printf("libmjpeg2http exit from loop\n");
   fflush(stdout);
