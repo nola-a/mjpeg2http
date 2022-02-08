@@ -251,7 +251,7 @@ static int check_token(const char *auth, uint8_t *start, int count) {
 void libmjpeg2http_endLoop() {
   if (g_runs > 0) {
     --g_runs;
-    uint64_t beep;
+    uint64_t beep = 1;
     if (write(g_exitfd, &beep, sizeof(uint64_t))) {
       printf("trigger exit\n");
     }
